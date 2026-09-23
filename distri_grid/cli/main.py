@@ -271,6 +271,7 @@ def run_example(
                 )
 
                 last_step = 0
+                idle_ticks = 0
                 while True:
                     time.sleep(0.5)
                     try:
@@ -286,14 +287,18 @@ def run_example(
                             if cur_step > last_step:
                                 advance_by = cur_step - last_step
                                 last_step = cur_step
+                                idle_ticks = 0
                                 progress.update(
                                     train_task,
                                     advance=advance_by,
                                     loss=f"{loss_val:.4f}" if loss_val is not None else "--",
                                     acc=f"{acc_val:.1f}" if acc_val is not None else "--",
                                 )
+                            else:
+                                idle_ticks += 1
 
-                            if state in ("completed", TaskState.COMPLETED.value, "COMPLETED"):
+                            # If state is marked completed, or all steps reached, or 98%+ finished with no more steps
+                            if state in ("completed", TaskState.COMPLETED.value, "COMPLETED") or cur_step >= total_steps or (cur_step >= total_steps - 1 and idle_ticks >= 4):
                                 progress.update(train_task, completed=total_steps)
                                 break
                     except Exception:
