@@ -45,14 +45,16 @@ class WorkerDaemon:
         worker_id: Optional[str] = None,
         device: Optional[str] = None,
     ):
-        self.master_url = master_url.rstrip("/")
+        clean_url = master_url.strip().strip("'\"").replace("<", "").replace(">", "").rstrip("/")
         # Convert http(s) to ws(s) if provided as http
-        if self.master_url.startswith("http://"):
-            self.master_url = "ws://" + self.master_url[7:]
-        elif self.master_url.startswith("https://"):
-            self.master_url = "wss://" + self.master_url[8:]
-        elif not self.master_url.startswith("ws://") and not self.master_url.startswith("wss://"):
-            self.master_url = "ws://" + self.master_url
+        if clean_url.startswith("http://"):
+            self.master_url = "ws://" + clean_url[7:]
+        elif clean_url.startswith("https://"):
+            self.master_url = "wss://" + clean_url[8:]
+        elif clean_url.startswith("ws://") or clean_url.startswith("wss://"):
+            self.master_url = clean_url
+        else:
+            self.master_url = "ws://" + clean_url
 
         self.worker_id = worker_id or f"worker_{uuid.uuid4().hex[:8]}"
         self.worker_name = worker_name or f"Node-{self.worker_id[-4:]}"
