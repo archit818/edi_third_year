@@ -15,6 +15,8 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 
+from distri_grid.protocol.messages import TaskState
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -123,6 +125,8 @@ def status(
             table.add_column("Node Name", style="bold")
             table.add_column("Device / GPU", style="green")
             table.add_column("VRAM (MB)", justify="right")
+            table.add_column("GPU Core %", justify="right", style="cyan")
+            table.add_column("Temp (°C)", justify="right", style="red")
             table.add_column("CPU %", justify="right")
             table.add_column("RAM %", justify="right")
             table.add_column("Task State", style="yellow")
@@ -133,6 +137,10 @@ def status(
                 status_str = "[green]ONLINE[/green]" if is_alive else "[red]OFFLINE[/red]"
                 gpu_str = w.get("gpu_name") or "CPU"
                 vram_str = f"{w.get('gpu_vram_used_mb', 0)} / {w.get('gpu_vram_mb', 0)}" if w.get("gpu_available") else "-"
+                gpu_util = w.get("gpu_util_percent")
+                gpu_util_str = f"{gpu_util:.1f}%" if gpu_util is not None else "-"
+                gpu_temp = w.get("gpu_temp_c")
+                gpu_temp_str = f"{gpu_temp:.0f}°C" if gpu_temp is not None else "-"
                 task_str = f"{w.get('task_state', 'idle')}"
                 if w.get("active_task_id"):
                     task_str += f" ({w.get('active_task_id')[:8]})"
@@ -142,6 +150,8 @@ def status(
                     str(w.get("name")),
                     str(gpu_str),
                     str(vram_str),
+                    gpu_util_str,
+                    gpu_temp_str,
                     f"{w.get('cpu_percent', 0)}%",
                     f"{w.get('ram_percent', 0)}%",
                     str(task_str),
@@ -298,7 +308,7 @@ def run_example(
                                 idle_ticks += 1
 
                             # If state is marked completed, or all steps reached, or 98%+ finished with no more steps
-                            if state in ("completed", TaskState.COMPLETED.value, "COMPLETED") or cur_step >= total_steps or (cur_step >= total_steps - 1 and idle_ticks >= 4):
+                            if (state and state.lower() in ("completed", "done")) or cur_step >= total_steps or (cur_step >= total_steps - 1 and idle_ticks >= 4):
                                 progress.update(train_task, completed=total_steps)
                                 break
                     except Exception:

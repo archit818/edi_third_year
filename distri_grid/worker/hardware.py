@@ -4,6 +4,7 @@ Auto-detects NVIDIA CUDA GPUs, VRAM capacity, CPU resources, and thermals.
 """
 import os
 import platform
+import subprocess
 import psutil
 from typing import Dict, Any, Optional
 import torch
@@ -34,6 +35,42 @@ class HardwareProfiler:
             except Exception:
                 self.cuda_available = False
 
+        # If PyTorch doesn't detect it but an NVIDIA GPU is physically present via nvidia-smi
+        if not self.cuda_available:
+            smi_data = self._query_nvidia_smi()
+            if smi_data:
+                self.gpu_vram_mb = smi_data.get("vram_total_mb", 0.0)
+                try:
+                    name_out = subprocess.run(
+                        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                        capture_output=True, text=True, timeout=1.5
+                    )
+                    self.device_name = name_out.stdout.strip().split("\n")[0]
+                except Exception:
+                    self.device_name = "NVIDIA GPU (CUDA wheel needed)"
+
+    def _query_nvidia_smi(self) -> Optional[Dict[str, float]]:
+        """Queries nvidia-smi for accurate real-time GPU core %, temperature, and memory."""
+        try:
+            cmd = [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits"
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1.5, check=True)
+            line = res.stdout.strip().split("\n")[0]
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 4:
+                return {
+                    "gpu_util_percent": float(parts[0]),
+                    "gpu_temp_c": float(parts[1]),
+                    "vram_used_mb": float(parts[2]),
+                    "vram_total_mb": float(parts[3]),
+                }
+        except Exception:
+            pass
+        return None
+
     def get_static_specs(self) -> Dict[str, Any]:
         """Returns static hardware specifications for worker registration."""
         return {
@@ -41,7 +78,7 @@ class HardwareProfiler:
             "platform": self.platform,
             "cpu_cores": self.cpu_cores,
             "ram_gb": self.total_ram_gb,
-            "gpu_available": self.cuda_available,
+            "gpu_available": self.cuda_available or bool(self.device_name and "NVIDIA" in self.device_name),
             "gpu_name": self.device_name,
             "gpu_vram_mb": self.gpu_vram_mb,
             "cuda_version": self.cuda_version,
@@ -56,11 +93,17 @@ class HardwareProfiler:
         vram_used_mb = None
         gpu_temp_c = None
 
-        if self.cuda_available:
+        # 1. Primary: Query nvidia-smi for accurate real-time GPU Core compute % & thermals
+        smi = self._query_nvidia_smi()
+        if smi:
+            gpu_util = smi["gpu_util_percent"]
+            gpu_temp_c = smi["gpu_temp_c"]
+            vram_used_mb = smi["vram_used_mb"]
+        elif self.cuda_available:
+            # 2. Fallback: PyTorch CUDA info if nvidia-smi not in PATH
             try:
                 free_b, total_b = torch.cuda.mem_get_info(0)
                 vram_used_mb = round((total_b - free_b) / (1024 ** 2), 2)
-                # Compute approximate utilization from allocated memory ratio
                 gpu_util = min(100.0, round((vram_used_mb / self.gpu_vram_mb) * 100, 1)) if self.gpu_vram_mb else 0.0
             except Exception:
                 pass
