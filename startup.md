@@ -38,17 +38,15 @@ distri-grid master --host 0.0.0.0 --port 8000
 
 On each computer joining the compute cluster:
 
-### Step A: Clone / Copy Project Folder & Install CUDA PyTorch
+### Step A: Clone / Copy Project Folder & Install Dependencies
 Copy the repository to the worker PC and activate the environment:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 
-# IMPORTANT FOR NVIDIA GPU USERS:
-# Standard 'pip install torch' installs CPU-only by default on Windows.
-# Run this command to enable your NVIDIA GPU with CUDA:
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall
-pip install -e .
+# Automatically installs CUDA PyTorch (with CPU fallback) and distri-grid CLI:
+pip install -r requirements.txt
 ```
 
 *Verify GPU is detected on the friend's PC:*

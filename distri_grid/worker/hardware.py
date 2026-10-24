@@ -28,6 +28,9 @@ class HardwareProfiler:
 
         if self.cuda_available:
             try:
+                # Test allocation to verify CUDA is functional and avoid driver crashes
+                _test = torch.zeros(1, device="cuda:0")
+                del _test
                 self.device_name = torch.cuda.get_device_name(0)
                 free_b, total_b = torch.cuda.mem_get_info(0)
                 self.gpu_vram_mb = round(total_b / (1024 ** 2), 2)

@@ -67,7 +67,12 @@ class MLRunner:
                 nn.Linear(128, num_classes)
             )
 
-        self.model.to(self.device)
+        try:
+            self.model.to(self.device)
+        except Exception as e:
+            logger.warning(f"Could not place model on {self.device} ({e}). Falling back to CPU.")
+            self.device = torch.device("cpu")
+            self.model.to(self.device)
 
         # 2. Setup Optimizer
         lr = hyperparams.get("lr", 0.001)
@@ -149,8 +154,15 @@ class MLRunner:
             if inputs is None or targets is None:
                 continue
 
-            inputs = inputs.to(self.device)
-            targets = targets.to(self.device)
+            try:
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
+            except Exception as e:
+                logger.warning(f"Tensor transfer to {self.device} failed ({e}). Falling back to CPU.")
+                self.device = torch.device("cpu")
+                self.model.to(self.device)
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
 
             # Training forward & backward pass
             t0 = time.time()

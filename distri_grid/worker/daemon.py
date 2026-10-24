@@ -61,7 +61,11 @@ class WorkerDaemon:
         
         self.profiler = HardwareProfiler()
         if device:
-            self.device = device
+            if "cuda" in device and not self.profiler.cuda_available:
+                logger.warning(f"Device '{device}' requested but CUDA is not available. Falling back to 'cpu'.")
+                self.device = "cpu"
+            else:
+                self.device = device
         else:
             self.device = "cuda:0" if self.profiler.cuda_available else "cpu"
 
